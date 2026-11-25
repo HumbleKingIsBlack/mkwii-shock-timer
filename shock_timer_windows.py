@@ -302,11 +302,9 @@ class ShockTimerWindows:
         header.pack(fill="x", pady=(0, 18))
         tk.Label(header, text="⚡ Shock Timer", bg=self.BG, fg=self.TEXT, font=("Segoe UI", 22, "bold")).pack(side="left")
         tk.Label(header, text="Mario Kart Wii audio assistant", bg=self.BG, fg=self.MUTED, font=("Segoe UI", 10)).pack(side="left", padx=16, pady=(10, 0))
-        self.toggle = tk.Button(header, text="ENABLE LISTENING", command=self.toggle_monitoring, bg="#243047", fg=self.TEXT,
-                                activebackground="#31415f", activeforeground=self.TEXT, bd=0, padx=16, pady=9, cursor="hand2")
+        self.toggle = tk.Button(header, text="●  OFFLINE", command=self.toggle_monitoring, bg="#252b39", fg="#a9b4c9",
+                                activebackground="#2d3546", activeforeground=self.TEXT, bd=0, width=15, padx=16, pady=9, cursor="hand2")
         self.toggle.pack(side="right")
-        self.status = tk.Label(header, text="OFFLINE", bg="#282e3d", fg="#a9b4c9", padx=12, pady=8, font=("Segoe UI", 9, "bold"))
-        self.status.pack(side="right", padx=10)
 
         body = tk.Frame(root, bg=self.BG)
         body.pack(fill="both", expand=True)
@@ -374,8 +372,7 @@ class ShockTimerWindows:
             return
         self.enabled = True
         self.device_combo.configure(state="disabled")
-        self.toggle.configure(text="DISABLE LISTENING", bg="#244b3c")
-        self.status.configure(text="LISTENING", bg="#153d31", fg="#62e6a9")
+        self.toggle.configure(text="●  ONLINE", bg="#153d31", fg="#62e6a9", activebackground="#1d513f", activeforeground="#62e6a9")
         self.config["audio_device"] = device
         save_config(self.config)
         self.add_log("Monitoring enabled", device)
@@ -386,8 +383,7 @@ class ShockTimerWindows:
             self.capture = None
         self.enabled = False
         self.device_combo.configure(state="readonly")
-        self.toggle.configure(text="ENABLE LISTENING", bg="#243047")
-        self.status.configure(text="OFFLINE", bg="#282e3d", fg="#a9b4c9")
+        self.toggle.configure(text="●  OFFLINE", bg="#252b39", fg="#a9b4c9", activebackground="#2d3546", activeforeground=self.TEXT)
 
     def capture_error(self, message):
         self.stop_monitoring()

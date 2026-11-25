@@ -375,12 +375,11 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
         title.set_markup("<span size='22000' weight='bold'>⚡ Shock Timer</span>\n<span foreground='#8f9bb3'>Mario Kart Wii audio assistant</span>")
         title.set_xalign(0)
         header.pack_start(title, True, True, 0)
-        self.status_label = Gtk.Label(label="OFFLINE")
-        self.status_label.get_style_context().add_class("pill")
-        header.pack_end(self.status_label, False, False, 0)
-        self.enable_switch = Gtk.Switch()
+        self.enable_switch = Gtk.ToggleButton(label="●  OFFLINE")
+        self.enable_switch.set_size_request(148, 42)
         self.enable_switch.set_valign(Gtk.Align.CENTER)
-        self.enable_switch.connect("notify::active", self.toggle_monitoring)
+        self.enable_switch.get_style_context().add_class("monitor-toggle")
+        self.enable_switch.connect("toggled", self.toggle_monitoring)
         header.pack_end(self.enable_switch, False, False, 0)
         root.pack_start(header, False, False, 0)
 
@@ -462,7 +461,7 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
         if self.source_combo.get_active() < 0:
             self.source_combo.set_active_id("default")
 
-    def toggle_monitoring(self, switch, _):
+    def toggle_monitoring(self, switch):
         if switch.get_active():
             self.start_monitoring()
         else:
@@ -481,8 +480,8 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
             self.capture_error(str(error))
             return
         self.source_combo.set_sensitive(False)
-        self.status_label.set_text("LISTENING")
-        self.status_label.get_style_context().add_class("live")
+        self.enable_switch.set_label("●  ONLINE")
+        self.enable_switch.get_style_context().add_class("live")
         self.add_log("Monitoring enabled", source)
         self.render_state()
 
@@ -491,8 +490,8 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
             self.capture.stop()
             self.capture = None
         self.source_combo.set_sensitive(True)
-        self.status_label.set_text("OFFLINE")
-        self.status_label.get_style_context().remove_class("live")
+        self.enable_switch.set_label("●  OFFLINE")
+        self.enable_switch.get_style_context().remove_class("live")
         self.render_state()
 
     def capture_error(self, message):
@@ -655,8 +654,9 @@ label { color: #eef2ff; }
 .state-title { font-size: 22px; font-weight: 700; }
 .muted { color: #8f9bb3; }
 .section { color: #75829d; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; margin-top: 7px; }
-.pill { background: #282e3d; color: #a9b4c9; border-radius: 999px; padding: 7px 12px; font-size: 11px; font-weight: 700; }
-.pill.live { background: #153d31; color: #62e6a9; }
+.monitor-toggle { background: #252b39; color: #a9b4c9; border: 1px solid #394257; border-radius: 999px; padding: 8px 16px; font-size: 11px; font-weight: 700; }
+.monitor-toggle:hover { background: #2d3546; }
+.monitor-toggle:checked, .monitor-toggle.live { background: #153d31; color: #62e6a9; border-color: #28654e; }
 .file-chip { background: #171c26; border: 1px solid #30394d; border-radius: 8px; padding: 9px 11px; color: #cfd7e8; }
 .log-title { font-weight: 700; }
 button { background: #242b3a; color: #eef2ff; border: 1px solid #343e53; border-radius: 8px; padding: 9px 13px; }
