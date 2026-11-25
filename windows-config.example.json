@@ -1,4 +1,5 @@
 {
   "audio_device": "",
+  "output_device": "",
   "alert_sound": ""
 }

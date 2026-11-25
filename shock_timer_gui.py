@@ -362,6 +362,7 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
         self.alert_process = None
         self._build()
         self.refresh_sources()
+        self.refresh_outputs()
         GLib.timeout_add(100, self.on_tick)
         self.connect("delete-event", self.on_close)
 
@@ -413,7 +414,17 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
         input_row.pack_end(refresh, False, False, 0)
         right.pack_start(input_row, False, False, 0)
 
-        right.pack_start(self.section_label("AVAILABLE ALERT"), False, False, 0)
+        right.pack_start(self.section_label("ALERT OUTPUT"), False, False, 0)
+        output_row = Gtk.Box(spacing=8)
+        self.output_combo = Gtk.ComboBoxText()
+        self.output_combo.set_hexpand(True)
+        self.output_combo.connect("changed", self.output_changed)
+        output_row.pack_start(self.output_combo, True, True, 0)
+        output_refresh = Gtk.Button(label="↻")
+        output_refresh.connect("clicked", lambda *_: self.refresh_outputs())
+        output_row.pack_end(output_refresh, False, False, 0)
+        right.pack_start(output_row, False, False, 0)
+        right.pack_start(self.section_label("ALERT SOUND"), False, False, 0)
         alert_row = Gtk.Box(spacing=8)
         self.sound_label = Gtk.Label(label=self.sound_name(), xalign=0)
         self.sound_label.set_ellipsize(3)
@@ -460,6 +471,28 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
         self.source_combo.set_active_id(previous)
         if self.source_combo.get_active() < 0:
             self.source_combo.set_active_id("default")
+
+    def refresh_outputs(self):
+        previous = self.config.get("output_device", "default")
+        self.output_combo.remove_all()
+        self.output_combo.append("default", "Default system output")
+        try:
+            result = subprocess.run(["pactl", "list", "short", "sinks"], capture_output=True, text=True, timeout=3)
+            for line in result.stdout.splitlines():
+                fields = line.split("\t")
+                if len(fields) >= 2:
+                    self.output_combo.append(fields[1], fields[1])
+        except (OSError, subprocess.SubprocessError):
+            pass
+        self.output_combo.set_active_id(previous)
+        if self.output_combo.get_active() < 0:
+            self.output_combo.set_active_id("default")
+
+    def output_changed(self, combo):
+        selected = combo.get_active_id()
+        if selected:
+            self.config["output_device"] = selected
+            save_config(self.config)
 
     def toggle_monitoring(self, switch):
         if switch.get_active():
@@ -571,7 +604,11 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
             source = "sine=frequency=1046:duration=.30"
             command = ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", "-f", "lavfi", "-i", source]
         try:
-            self.alert_process = subprocess.Popen(command)
+            environment = os.environ.copy()
+            output = self.output_combo.get_active_id() or "default"
+            if output != "default":
+                environment["PULSE_SINK"] = output
+            self.alert_process = subprocess.Popen(command, env=environment)
         except OSError as error:
             self.add_log("Could not play alert", str(error))
 

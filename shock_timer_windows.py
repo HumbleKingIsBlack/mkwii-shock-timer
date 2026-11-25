@@ -210,6 +210,23 @@ def list_dshow_audio_devices():
     return devices
 
 
+def list_windows_output_devices():
+    import sounddevice as sd
+
+    devices = []
+    host_apis = sd.query_hostapis()
+    default_output = sd.default.device[1]
+    for index, device in enumerate(sd.query_devices()):
+        if device["max_output_channels"] <= 0:
+            continue
+        host_name = host_apis[device["hostapi"]]["name"]
+        prefix = "Default — " if index == default_output else ""
+        display = f"{prefix}{device['name']} — {host_name} [{index}]"
+        devices.append((display, index))
+    devices.sort(key=lambda item: item[1] != default_output)
+    return devices
+
+
 class CaptureWorker:
     def __init__(self, device, matcher, error_callback):
         self.device, self.matcher, self.error_callback = device, matcher, error_callback
@@ -279,14 +296,15 @@ class ShockTimerWindows:
         self.session = RaceSession()
         self.matcher = SpectralMatcher(lambda *event: self.root.after(0, self.on_match, *event))
         self.capture = None
-        self.alert_process = None
         self.enabled = False
         self.devices = []
+        self.output_devices = {}
         self.icon = tk.PhotoImage(file=str(APP_DIR / "assets" / "shock.png"))
         self.small_icon = self.icon.subsample(3, 3)
         self.root.iconphoto(True, self.icon)
         self._build()
         self.refresh_devices()
+        self.refresh_outputs()
         self.tick()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
@@ -329,9 +347,17 @@ class ShockTimerWindows:
         self.device_combo.pack(side="left", fill="x", expand=True, ipady=6)
         tk.Button(device_row, text="↻", command=self.refresh_devices, bg="#242b3a", fg=self.TEXT, bd=0, padx=13, pady=9).pack(side="right", padx=(8, 0))
 
-        self.section(right, "AVAILABLE ALERT")
+        self.section(right, "ALERT OUTPUT")
+        output_row = tk.Frame(right, bg=self.BG)
+        output_row.pack(fill="x", pady=(6, 8))
+        self.output_var = tk.StringVar(value=self.config.get("output_device", ""))
+        self.output_combo = ttk.Combobox(output_row, textvariable=self.output_var, state="readonly", style="Dark.TCombobox")
+        self.output_combo.pack(side="left", fill="x", expand=True, ipady=6)
+        self.output_combo.bind("<<ComboboxSelected>>", self.output_changed)
+        tk.Button(output_row, text="↻", command=self.refresh_outputs, bg="#242b3a", fg=self.TEXT, bd=0, padx=13, pady=9).pack(side="right", padx=(8, 0))
+        self.section(right, "ALERT SOUND")
         alert_row = tk.Frame(right, bg=self.BG)
-        alert_row.pack(fill="x", pady=(6, 8))
+        alert_row.pack(fill="x", pady=(0, 8))
         self.sound_label = tk.Label(alert_row, text=self.sound_name(), anchor="w", bg=self.CARD, fg="#cfd7e8", padx=11, pady=10)
         self.sound_label.pack(side="left", fill="x", expand=True)
         tk.Button(alert_row, text="Choose…", command=self.choose_sound, bg="#242b3a", fg=self.TEXT, bd=0, padx=13, pady=10).pack(side="right", padx=(8, 0))
@@ -353,6 +379,33 @@ class ShockTimerWindows:
             self.device_var.set(self.devices[0] if self.devices else "")
         if not self.devices:
             self.add_log("No DirectShow audio inputs found", "Check FFmpeg and reconnect the capture card")
+
+    def refresh_outputs(self):
+        previous = self.config.get("output_device", "")
+        try:
+            outputs = list_windows_output_devices()
+        except Exception as error:
+            self.output_devices = {}
+            self.output_combo["values"] = []
+            self.output_var.set("")
+            self.add_log("No audio outputs found", str(error))
+            return
+        self.output_devices = dict(outputs)
+        self.output_combo["values"] = list(self.output_devices)
+        if previous in self.output_devices:
+            selected = previous
+        else:
+            selected = outputs[0][0] if outputs else ""
+        self.output_var.set(selected)
+        if selected:
+            self.config["output_device"] = selected
+            save_config(self.config)
+
+    def output_changed(self, _event=None):
+        selected = self.output_var.get()
+        if selected in self.output_devices:
+            self.config["output_device"] = selected
+            save_config(self.config)
 
     def toggle_monitoring(self):
         if self.enabled:
@@ -449,23 +502,39 @@ class ShockTimerWindows:
             self.sound_label.configure(text=self.sound_name())
 
     def play_alert(self):
-        custom = self.config.get("alert_sound", "")
-        if custom and Path(custom).is_file():
-            if self.alert_process and self.alert_process.poll() is None:
-                self.alert_process.terminate()
-            try:
-                self.alert_process = subprocess.Popen(
-                    ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", custom],
+        threading.Thread(target=self._play_alert_worker, name="alert-playback", daemon=True).start()
+
+    def _play_alert_worker(self):
+        try:
+            import sounddevice as sd
+
+            display = self.output_var.get()
+            if display not in self.output_devices:
+                raise RuntimeError("Select an alert output device first.")
+            device_index = self.output_devices[display]
+            device = sd.query_devices(device_index)
+            sample_rate = int(device["default_samplerate"] or 48000)
+            channels = 2 if device["max_output_channels"] >= 2 else 1
+            sd.stop()
+            custom = self.config.get("alert_sound", "")
+            if custom and Path(custom).is_file():
+                result = subprocess.run(
+                    ["ffmpeg", "-v", "error", "-i", custom, "-ac", str(channels), "-ar", str(sample_rate), "-f", "f32le", "pipe:1"],
+                    capture_output=True,
+                    check=True,
                     creationflags=CREATE_NO_WINDOW,
                 )
-            except OSError as error:
-                self.add_log("Could not play alert", str(error))
-        else:
-            try:
-                import winsound
-                threading.Thread(target=lambda: (winsound.Beep(784, 140), winsound.Beep(1046, 180)), daemon=True).start()
-            except (ImportError, RuntimeError):
-                pass
+                samples = np.frombuffer(result.stdout, dtype="<f4")
+                if channels > 1:
+                    samples = samples.reshape(-1, channels)
+            else:
+                first = np.sin(2 * np.pi * 784 * np.arange(int(sample_rate * 0.14)) / sample_rate)
+                second = np.sin(2 * np.pi * 1046 * np.arange(int(sample_rate * 0.18)) / sample_rate)
+                mono = np.concatenate((first, np.zeros(int(sample_rate * 0.03)), second)).astype(np.float32) * 0.22
+                samples = np.repeat(mono[:, None], channels, axis=1) if channels > 1 else mono
+            sd.play(samples, sample_rate, device=device_index, blocking=False)
+        except Exception as error:
+            self.root.after(0, self.add_log, "Could not play alert", str(error))
 
     def add_log(self, message, detail):
         self.log.configure(state="normal")
@@ -475,8 +544,11 @@ class ShockTimerWindows:
 
     def close(self):
         self.stop_monitoring()
-        if self.alert_process and self.alert_process.poll() is None:
-            self.alert_process.terminate()
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
         self.root.destroy()
 
     def run(self):

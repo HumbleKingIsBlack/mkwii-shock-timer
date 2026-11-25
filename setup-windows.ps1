@@ -28,6 +28,7 @@ New-Item -ItemType Directory -Force -Path $ConfigDirectory | Out-Null
 if (-not (Test-Path $ConfigFile)) {
     @{
         audio_device = ""
+        output_device = ""
         alert_sound = ""
     } | ConvertTo-Json | Set-Content -Encoding UTF8 $ConfigFile
 }

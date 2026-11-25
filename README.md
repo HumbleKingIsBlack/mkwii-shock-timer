@@ -14,7 +14,7 @@ Audio stays on the computer. The detector does not use a network service.
 1. Install [Python 3.11 or newer](https://www.python.org/downloads/windows/) and enable **Add Python to PATH** during installation.
 2. Double-click `setup-windows.bat`. It creates an isolated `.venv`, installs NumPy, and installs FFmpeg through `winget` if needed.
 3. Double-click `launch-windows.bat`.
-4. Select the capture card under **Audio input**, choose an optional alert sound, and click **Enable listening**.
+4. Select the capture card under **Audio input**, select the exact **Alert output** device, choose an optional alert sound, and click **Enable listening**.
 
 Windows settings are saved to `%APPDATA%\ShockTimer\config.json`; `windows-config.example.json` documents its fields. Audio capture uses FFmpeg's DirectShow input, so the capture card must appear as a Windows recording device.
 
@@ -42,7 +42,7 @@ cd mkwii-shock-timer
 ./launch-gui.sh
 ```
 
-Choose the capture-card source, optionally select an alert sound, and enable listening with the switch in the top-right corner.
+Choose the capture-card source, select the exact alert-output sink, optionally select an alert sound, and enable listening with the switch in the top-right corner.
 
 ## Offline detector test
 
