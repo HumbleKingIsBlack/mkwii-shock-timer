@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+.gh-config/
+test-results/
+revo_kart.brsar
+Shock Timer.desktop
+.DS_Store
+
+# Legacy browser prototype (the GitHub project ships the native Python GUI).
+app.js
+core.js
+detector.js
+index.html
+launch.sh
+manifest.webmanifest
+server.js
+service-worker.js
+styles.css
+test.js
+tools/

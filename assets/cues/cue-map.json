@@ -1,0 +1,41 @@
+{
+  "source": "revo_kart.brsar (local source archive; not distributed)",
+  "sourceSha256": "cdb0d2a9e86b7394f6826696f860e3855bfd5cb792ac7770db5328a853e499bb",
+  "format": "stereo PCM 16-bit, 32000 Hz",
+  "cues": {
+    "SE_RC_GO": {
+      "soundId": 215,
+      "sequenceOffset": 341,
+      "bankIndex": 7,
+      "file": "race-start.wav",
+      "durationSeconds": 2.3,
+      "sha256": "dd4ed986a6948475dfec23e0ef92d35efa325dd0ce80d57c436894b6be478229"
+    },
+    "SE_RC_GOAL": {
+      "soundId": 219,
+      "soundFileIndex": 392,
+      "soundFileType": "RSEQ",
+      "groups": ["GRP_CMN", "GRP_RACE"],
+      "sequenceOffset": 538,
+      "bankIndex": 8,
+      "bankName": "BNK_ITEM_SE",
+      "bankFileIndex": 89,
+      "bankGroup": "GRP_RACE",
+      "file": "race-end.wav",
+      "durationSeconds": 2.534469,
+      "sha256": "9b4e72e26320353f11f9b4648a5d89d6feafb40962900c367d76483b6010173e",
+      "referenceSource": "Mario Kart End Race Sound effect.mp3",
+      "referenceSourceSha256": "cf54e007ef8b729f3937f2fdd83cfc16fea267c782b25628fad39d4651a626e4",
+      "trimmedLeadingSilenceSeconds": 1.06334,
+      "trimmedTrailingFromSeconds": 3.59781
+    },
+    "SE_ITM_THNDR_USE": {
+      "soundId": 276,
+      "sequenceOffset": 586,
+      "bankIndex": 8,
+      "file": "shock-used.wav",
+      "durationSeconds": 5.5,
+      "sha256": "36e930f1c68d64ee23be1e8c7a8a2db332bf5a175e3d23b36cd5a852e56f7377"
+    }
+  }
+}
