@@ -1,0 +1,72 @@
+name: Build Windows executable
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: python -m pip install -r requirements-windows.txt pyinstaller
+
+      - name: Download and verify static FFmpeg
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "ffmpeg-9.1-essentials.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "ffmpeg-9.1"
+          Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-9.1-essentials_build.zip" -OutFile $archive
+          $actualHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne "b9bbbb3acece000cbeec994f856649354e52c773807841e78908374b24d658fd") {
+            throw "FFmpeg archive SHA-256 did not match the expected value."
+          }
+          Expand-Archive -Path $archive -DestinationPath $extract
+          $bin = Get-ChildItem -Path $extract -Directory -Recurse | Where-Object { Test-Path (Join-Path $_.FullName "ffmpeg.exe") } | Select-Object -First 1
+          if (-not $bin) { throw "ffmpeg.exe was not found in the verified archive." }
+          $bundle = Join-Path $env:RUNNER_TEMP "ffmpeg-bundle"
+          New-Item -ItemType Directory -Force -Path $bundle | Out-Null
+          Copy-Item (Join-Path $bin.FullName "ffmpeg.exe") $bundle
+          Get-ChildItem -Path $bin.FullName -Filter "*.dll" -File | Copy-Item -Destination $bundle
+          $license = Get-ChildItem -Path $extract -Filter "LICENSE.txt" -File -Recurse | Select-Object -First 1
+          if (-not $license) { throw "FFmpeg license file was not found in the verified archive." }
+          Copy-Item $license.FullName (Join-Path $env:RUNNER_TEMP "FFmpeg-LICENSE.txt")
+          @"
+          FFmpeg 9.1 essentials build, static GPLv3 build from gyan.dev.
+          FFmpeg source: https://github.com/FFmpeg/FFmpeg/tree/74e4393595
+          Build source: https://www.gyan.dev/ffmpeg/builds/
+          The accompanying FFmpeg-LICENSE.txt contains the license notice.
+          "@ | Set-Content (Join-Path $env:RUNNER_TEMP "FFmpeg-SOURCE.txt")
+
+      - name: Package self-contained executable
+        shell: pwsh
+        run: >-
+          pyinstaller --noconfirm --clean --windowed --onefile
+          --name ShockTimer
+          --add-data "assets;assets"
+          --add-binary "$env:RUNNER_TEMP\ffmpeg-bundle;ffmpeg"
+          --collect-all sounddevice
+          shock_timer_windows.py
+
+      - name: Create Windows archive
+        run: Compress-Archive -Path @("dist\ShockTimer.exe", (Join-Path $env:RUNNER_TEMP "FFmpeg-LICENSE.txt"), (Join-Path $env:RUNNER_TEMP "FFmpeg-SOURCE.txt")) -DestinationPath dist\ShockTimer-Windows-x64.zip
+        shell: pwsh
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: dist/ShockTimer-Windows-x64.zip

@@ -22,12 +22,18 @@ except ImportError as error:
     raise SystemExit("NumPy is required. Run setup-windows.bat first.") from error
 
 
-APP_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 CUE_DIR = APP_DIR / "assets" / "cues"
 CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / "ShockTimer"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 RATE = 32000
 CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
+
+
+def ffmpeg_executable():
+    """Use the bundled executable in packaged builds, or PATH in source installs."""
+    bundled = APP_DIR / "ffmpeg" / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+    return str(bundled) if bundled.is_file() else "ffmpeg"
 
 
 class SpectralMatcher:
@@ -192,7 +198,7 @@ class RaceSession:
 def list_dshow_audio_devices():
     try:
         result = subprocess.run(
-            ["ffmpeg", "-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"],
+            [ffmpeg_executable(), "-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -237,7 +243,7 @@ class CaptureWorker:
         if not self.device:
             raise RuntimeError("Select a capture-card audio device first.")
         command = [
-            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+            ffmpeg_executable(), "-nostdin", "-hide_banner", "-loglevel", "error",
             "-f", "dshow", "-i", f"audio={self.device}",
             "-ac", "1", "-ar", str(RATE), "-f", "f32le", "pipe:1",
         ]
@@ -546,7 +552,7 @@ class ShockTimerWindows:
             custom = self.config.get("alert_sound", "")
             if custom and Path(custom).is_file():
                 result = subprocess.run(
-                    ["ffmpeg", "-v", "error", "-i", custom, "-ac", str(channels), "-ar", str(sample_rate), "-f", "f32le", "pipe:1"],
+                    [ffmpeg_executable(), "-v", "error", "-i", custom, "-ac", str(channels), "-ar", str(sample_rate), "-f", "f32le", "pipe:1"],
                     capture_output=True,
                     check=True,
                     creationflags=CREATE_NO_WINDOW,
@@ -598,7 +604,7 @@ def analyze_video(video, stream):
     events = []
     matcher = SpectralMatcher(lambda *event: events.append(event))
     process = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-i", video, "-map", f"0:{stream}", "-ac", "1", "-ar", str(RATE), "-f", "f32le", "pipe:1"],
+        [ffmpeg_executable(), "-v", "error", "-i", video, "-map", f"0:{stream}", "-ac", "1", "-ar", str(RATE), "-f", "f32le", "pipe:1"],
         stdout=subprocess.PIPE,
         creationflags=CREATE_NO_WINDOW,
     )

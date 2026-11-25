@@ -11,6 +11,15 @@ Audio stays on the computer. The detector does not use a network service.
 
 ## Windows setup
 
+### Download the executable
+
+1. Download `ShockTimer-Windows-x64.zip` from the [latest release](https://github.com/HumbleKingIsBlack/mkwii-shock-timer/releases/latest) and extract it.
+2. Run `ShockTimer.exe`; the archive includes the Python runtime, application packages, and static FFmpeg, so separate Python or FFmpeg installation is not needed.
+
+The bundled FFmpeg 9.1 essentials build is a 64-bit static GPLv3 build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/), which is linked from the [FFmpeg download page](https://ffmpeg.org/download.html). Its license notice is included in the archive. Windows 10 or newer is required. The capture card must still be available as a Windows recording device.
+
+### Run from Python
+
 1. Install [Python 3.11 or newer](https://www.python.org/downloads/windows/) and enable **Add Python to PATH** during installation.
 2. Double-click `setup-windows.bat`. It creates an isolated `.venv`, installs the required Python packages, and installs FFmpeg through `winget` if needed.
 3. Double-click `launch-windows.bat`.
