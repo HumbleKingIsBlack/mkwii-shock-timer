@@ -1,5 +1,6 @@
 __pycache__/
 *.py[cod]
+.venv/
 .gh-config/
 test-results/
 revo_kart.brsar

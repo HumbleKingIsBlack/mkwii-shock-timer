@@ -1,6 +1,6 @@
 # Shock Timer
 
-A native Linux race assistant for Mario Kart Wii. It listens to capture-card audio and:
+A native Windows and Linux race assistant for Mario Kart Wii. It listens to capture-card audio and:
 
 - starts a fixed 30-second shock cooldown at race start;
 - plays a user-selected alert when shock becomes available;
@@ -9,17 +9,16 @@ A native Linux race assistant for Mario Kart Wii. It listens to capture-card aud
 
 Audio stays on the computer. The detector does not use a network service.
 
-## Features
+## Windows setup
 
-- Native Python/GTK dark interface
-- Enable/disable listening switch
-- PulseAudio/PipeWire capture-source selector
-- Circular recharge indicator with the lightning icon
-- Custom MP3, WAV, OGG, FLAC, M4A, AAC, or Opus alert
-- Local event history
-- Cue-specific thresholds validated against a complete recorded race
+1. Install [Python 3.11 or newer](https://www.python.org/downloads/windows/) and enable **Add Python to PATH** during installation.
+2. Double-click `setup-windows.bat`. It creates an isolated `.venv`, installs NumPy, and installs FFmpeg through `winget` if needed.
+3. Double-click `launch-windows.bat`.
+4. Select the capture card under **Audio input**, choose an optional alert sound, and click **Enable listening**.
 
-## Requirements
+Windows settings are saved to `%APPDATA%\ShockTimer\config.json`; `windows-config.example.json` documents its fields. Audio capture uses FFmpeg's DirectShow input, so the capture card must appear as a Windows recording device.
+
+## Linux requirements
 
 - Python 3
 - GTK 3 Python bindings (`python3-gi`)
@@ -35,7 +34,7 @@ sudo apt install python3-gi gir1.2-gtk-3.0 ffmpeg pulseaudio-utils libfftw3-3
 
 No `pip` packages are required.
 
-## Run
+## Run on Linux
 
 ```bash
 git clone https://github.com/HumbleKingIsBlack/mkwii-shock-timer.git
