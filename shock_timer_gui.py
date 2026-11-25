@@ -7,6 +7,7 @@ import argparse
 import array
 import cairo
 import ctypes
+import io
 import json
 import math
 import os
@@ -17,13 +18,15 @@ import sys
 import threading
 import time
 import wave
+from PIL import Image
+import colorsys
 from collections import deque
 
 import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
-from gi.repository import Gdk, GLib, Gtk  # noqa: E402
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk  # noqa: E402
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -312,17 +315,29 @@ class TimerDial(Gtk.DrawingArea):
         super().__init__()
         self.set_size_request(320, 320)
         self.state, self.remaining, self.cooldown = "idle", 0.0, 30.0
-        self.icon = cairo.ImageSurface.create_from_png(str(APP_DIR / "assets" / "shock.png"))
+        self.icon = GdkPixbuf.Pixbuf.new_from_file(str(APP_DIR / "assets" / "shock.png"))
+        self.original_icon = Image.open(APP_DIR / "assets" / "shock.png").convert("RGBA")
+        self.original_digits = {str(n): Image.open(APP_DIR / "assets" / "digits" / f"{n}.png").convert("RGBA") for n in range(10)}
+        self.hue = 0
+        self.digits = {str(n): GdkPixbuf.Pixbuf.new_from_file(str(APP_DIR / "assets" / "digits" / f"{n}.png")) for n in range(10)}
         self.connect("draw", self._draw)
 
     def update(self, state, remaining, cooldown):
         self.state, self.remaining, self.cooldown = state, remaining, cooldown
         self.queue_draw()
 
+    def set_icon_pixbuf(self, pixbuf):
+        self.icon = pixbuf
+        self.queue_draw()
+
+    def set_digit_pixbufs(self, images):
+        self.digits = images
+        self.queue_draw()
+
     def _draw(self, _, context):
         allocation = self.get_allocation()
-        cx, cy = allocation.width / 2, allocation.height / 2
-        radius = min(allocation.width, allocation.height) / 2 - 28
+        cx, cy = allocation.width / 2, allocation.height / 2 + 18
+        radius = min(allocation.width / 2 - 28, (allocation.height - 64) / 2 - 20)
         context.set_line_width(16)
         context.set_source_rgba(0.17, 0.20, 0.27, 1)
         context.arc(cx, cy, radius, 0, 2 * math.pi)
@@ -332,12 +347,30 @@ class TimerDial(Gtk.DrawingArea):
         progress = 1.0 if self.state == "available" else (1 - self.remaining / self.cooldown if self.state == "cooldown" else 0)
         context.arc(cx, cy, radius, -math.pi / 2, -math.pi / 2 + progress * 2 * math.pi)
         context.stroke()
+        countdown = "0" if self.state == "available" else (str(math.ceil(self.remaining)) if self.state == "cooldown" else "30")
+        digit_height = 64
+        digit_width = digit_height * 48 / 64
+        gap = 3
+        total_width = len(countdown) * digit_width + (len(countdown) - 1) * gap
+        top = cy - radius - digit_height - 10
+        context.save()
+        for index, digit in enumerate(countdown):
+            pixbuf = self.digits[digit]
+            scale = digit_height / pixbuf.get_height()
+            x = cx - total_width / 2 + index * (digit_width + gap)
+            context.save()
+            context.translate(x, top)
+            context.scale(scale, scale)
+            Gdk.cairo_set_source_pixbuf(context, pixbuf, 0, 0)
+            context.paint()
+            context.restore()
+        context.restore()
         icon_size = radius * 1.08
         icon_scale = icon_size / max(self.icon.get_width(), self.icon.get_height())
         context.save()
         context.translate(cx - self.icon.get_width() * icon_scale / 2, cy - self.icon.get_height() * icon_scale / 2 - 10)
         context.scale(icon_scale, icon_scale)
-        context.set_source_surface(self.icon, 0, 0)
+        Gdk.cairo_set_source_pixbuf(context, self.icon, 0, 0)
         context.paint_with_alpha(0.55 if self.state == "idle" else 1.0)
         context.restore()
         context.select_font_face("Sans", 0, 1)
@@ -360,6 +393,7 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
         self.matcher = SpectralMatcher(lambda *event: GLib.idle_add(self.on_match, *event))
         self.capture = None
         self.alert_process = None
+        self._hue_timeout = None
         self._build()
         self.refresh_sources()
         self.refresh_outputs()
@@ -372,10 +406,15 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
         self.add(root)
 
         header = Gtk.Box(spacing=14)
+        title_box = Gtk.Box(spacing=10)
+        title_pixbuf = GdkPixbuf.Pixbuf.new_from_file(str(APP_DIR / "assets" / "shock.png"))
+        title_icon = Gtk.Image.new_from_pixbuf(title_pixbuf.scale_simple(26, 26, GdkPixbuf.InterpType.BILINEAR))
+        title_box.pack_start(title_icon, False, False, 0)
         title = Gtk.Label()
-        title.set_markup("<span size='22000' weight='bold'>⚡ Shock Timer</span>\n<span foreground='#8f9bb3'>Mario Kart Wii audio assistant</span>")
+        title.set_markup("<span size='22000' weight='bold'>Shock Timer</span>\n<span foreground='#8f9bb3'>Mario Kart Wii audio assistant</span>")
         title.set_xalign(0)
-        header.pack_start(title, True, True, 0)
+        title_box.pack_start(title, False, False, 0)
+        header.pack_start(title_box, True, True, 0)
         self.enable_switch = Gtk.ToggleButton(label="●  OFFLINE")
         self.enable_switch.set_size_request(148, 42)
         self.enable_switch.set_valign(Gtk.Align.CENTER)
@@ -391,14 +430,6 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
         left.set_border_width(18)
         self.dial = TimerDial()
         left.pack_start(self.dial, True, True, 0)
-        self.state_title = Gtk.Label(label="Ready when you are")
-        self.state_title.get_style_context().add_class("state-title")
-        left.pack_start(self.state_title, False, False, 0)
-        self.state_detail = Gtk.Label(label="Enable listening to detect the next race.")
-        self.state_detail.set_line_wrap(True)
-        self.state_detail.set_justify(Gtk.Justification.CENTER)
-        self.state_detail.get_style_context().add_class("muted")
-        left.pack_start(self.state_detail, False, False, 0)
         body.pack_start(left, True, True, 0)
 
         right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -437,6 +468,11 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
         test = Gtk.Button(label="▶  Test alert sound")
         test.connect("clicked", lambda *_: self.play_alert())
         right.pack_start(test, False, False, 0)
+        right.pack_start(self.section_label("SHOCK IMAGE HUE"), False, False, 0)
+        self.hue_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 359, 1)
+        self.hue_scale.set_value(0)
+        self.hue_scale.connect("value-changed", self.change_hue)
+        right.pack_start(self.hue_scale, False, False, 0)
 
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -569,15 +605,40 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
 
     def render_state(self):
         self.dial.update(self.session.state, self.session.remaining(), self.session.cooldown)
-        if self.session.state == "idle":
-            self.state_title.set_text("Listening for race start" if self.enable_switch.get_active() else "Ready when you are")
-            self.state_detail.set_text("The timer begins on the GO cue." if self.enable_switch.get_active() else "Enable listening to detect the next race.")
-        elif self.session.state == "cooldown":
-            self.state_title.set_text("Shock recharging")
-            self.state_detail.set_text("A shock restarts the timer. FINITO cancels it.")
-        else:
-            self.state_title.set_text("Shock is available")
-            self.state_detail.set_text("Listening for the next shock or race finish.")
+
+    def change_hue(self, scale):
+        hue = int(scale.get_value())
+        if self._hue_timeout is not None:
+            GLib.source_remove(self._hue_timeout)
+        self._hue_timeout = GLib.timeout_add(60, self.apply_digit_hue, hue)
+
+    def apply_digit_hue(self, hue):
+        self._hue_timeout = None
+        def shifted(source):
+            rgba = source.convert("RGBA")
+            alpha = rgba.getchannel("A")
+            image = rgba.convert("HSV")
+            h, s, v = image.split()
+            h = h.point(lambda _value: int((hue % 360) * 255 / 360))
+            s = s.point(lambda value: max(value, 230))
+            tinted = Image.merge("HSV", (h, s, v)).convert("RGBA")
+            tinted.putalpha(alpha)
+            return tinted
+
+        def pixbuf_for(image):
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            loader = GdkPixbuf.PixbufLoader.new_with_type("png")
+            loader.write(buffer.getvalue())
+            loader.close()
+            return loader.get_pixbuf()
+        try:
+            tinted_digits = {digit: pixbuf_for(shifted(image)) for digit, image in self.dial.original_digits.items()}
+            self.dial.set_digit_pixbufs(tinted_digits)
+            self.dial.queue_draw()
+        except Exception as error:
+            print(f"Hue update failed: {error}", file=sys.stderr, flush=True)
+        return GLib.SOURCE_REMOVE
 
     def choose_sound(self, _):
         dialog = Gtk.FileChooserDialog("Choose the available-alert sound", self, Gtk.FileChooserAction.OPEN,

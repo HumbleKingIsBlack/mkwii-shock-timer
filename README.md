@@ -12,7 +12,7 @@ Audio stays on the computer. The detector does not use a network service.
 ## Windows setup
 
 1. Install [Python 3.11 or newer](https://www.python.org/downloads/windows/) and enable **Add Python to PATH** during installation.
-2. Double-click `setup-windows.bat`. It creates an isolated `.venv`, installs NumPy, and installs FFmpeg through `winget` if needed.
+2. Double-click `setup-windows.bat`. It creates an isolated `.venv`, installs the required Python packages, and installs FFmpeg through `winget` if needed.
 3. Double-click `launch-windows.bat`.
 4. Select the capture card under **Audio input**, select the exact **Alert output** device, choose an optional alert sound, and click **Enable listening**.
 
@@ -25,14 +25,15 @@ Windows settings are saved to `%APPDATA%\ShockTimer\config.json`; `windows-confi
 - FFmpeg and FFplay
 - PulseAudio/PipeWire compatibility tools (`pactl`)
 - FFTW 3
+- Pillow (`python3-pil`) for countdown digit color adjustment
 
 On Debian/Ubuntu-based systems, the corresponding packages are commonly installed with:
 
 ```bash
-sudo apt install python3-gi gir1.2-gtk-3.0 ffmpeg pulseaudio-utils libfftw3-3
+sudo apt install python3-gi gir1.2-gtk-3.0 python3-pil ffmpeg pulseaudio-utils libfftw3-3
 ```
 
-No `pip` packages are required.
+No additional `pip` packages are required when using the system packages above.
 
 ## Run on Linux
 

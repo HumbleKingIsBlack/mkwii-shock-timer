@@ -301,6 +301,14 @@ class ShockTimerWindows:
         self.output_devices = {}
         self.icon = tk.PhotoImage(file=str(APP_DIR / "assets" / "shock.png"))
         self.small_icon = self.icon.subsample(3, 3)
+        from PIL import Image, ImageTk
+        self.PILImage, self.ImageTk = Image, ImageTk
+        self.original_shock = Image.open(APP_DIR / "assets" / "shock.png").convert("RGBA")
+        self.original_digits = {str(n): Image.open(APP_DIR / "assets" / "digits" / f"{n}.png").convert("RGBA") for n in range(10)}
+        self.title_icon = self.ImageTk.PhotoImage(self.original_shock.resize((22, 22), self.PILImage.Resampling.LANCZOS))
+        self.hue = 0
+        self._hue_after = None
+        self.digits = {str(n): tk.PhotoImage(file=str(APP_DIR / "assets" / "digits" / f"{n}.png")) for n in range(10)}
         self.root.iconphoto(True, self.icon)
         self._build()
         self.refresh_devices()
@@ -318,7 +326,8 @@ class ShockTimerWindows:
         root.pack(fill="both", expand=True)
         header = tk.Frame(root, bg=self.BG)
         header.pack(fill="x", pady=(0, 18))
-        tk.Label(header, text="⚡ Shock Timer", bg=self.BG, fg=self.TEXT, font=("Segoe UI", 22, "bold")).pack(side="left")
+        tk.Label(header, image=self.title_icon, bg=self.BG).pack(side="left", padx=(0, 8))
+        tk.Label(header, text="Shock Timer", bg=self.BG, fg=self.TEXT, font=("Segoe UI", 22, "bold")).pack(side="left")
         tk.Label(header, text="Mario Kart Wii audio assistant", bg=self.BG, fg=self.MUTED, font=("Segoe UI", 10)).pack(side="left", padx=16, pady=(10, 0))
         self.toggle = tk.Button(header, text="●  OFFLINE", command=self.toggle_monitoring, bg="#252b39", fg="#a9b4c9",
                                 activebackground="#2d3546", activeforeground=self.TEXT, bd=0, width=15, padx=16, pady=9, cursor="hand2")
@@ -329,12 +338,7 @@ class ShockTimerWindows:
         left = tk.Frame(body, bg=self.CARD, highlightbackground="#283043", highlightthickness=1)
         left.pack(side="left", fill="both", expand=True, padx=(0, 18))
         self.canvas = tk.Canvas(left, width=360, height=390, bg=self.CARD, highlightthickness=0)
-        self.canvas.pack(fill="both", expand=True, padx=20, pady=(18, 0))
-        self.state_title = tk.Label(left, text="Ready when you are", bg=self.CARD, fg=self.TEXT, font=("Segoe UI", 18, "bold"))
-        self.state_title.pack(pady=(0, 5))
-        self.state_detail = tk.Label(left, text="Enable listening to detect the next race.", bg=self.CARD, fg=self.MUTED,
-                                     font=("Segoe UI", 10), wraplength=420)
-        self.state_detail.pack(pady=(0, 22))
+        self.canvas.pack(fill="both", expand=True, padx=20, pady=18)
 
         right = tk.Frame(body, bg=self.BG, width=420)
         right.pack(side="right", fill="both")
@@ -362,6 +366,10 @@ class ShockTimerWindows:
         self.sound_label.pack(side="left", fill="x", expand=True)
         tk.Button(alert_row, text="Choose…", command=self.choose_sound, bg="#242b3a", fg=self.TEXT, bd=0, padx=13, pady=10).pack(side="right", padx=(8, 0))
         tk.Button(right, text="▶  Test alert sound", command=self.play_alert, bg="#242b3a", fg=self.TEXT, bd=0, pady=10).pack(fill="x", pady=(0, 16))
+        self.section(right, "COUNTDOWN COLOR HUE")
+        self.hue_scale = tk.Scale(right, from_=0, to=359, orient="horizontal", command=self.change_hue,
+                                  bg=self.BG, fg=self.TEXT, troughcolor="#394257", highlightthickness=0, bd=0)
+        self.hue_scale.pack(fill="x", pady=(0, 12))
 
         self.log = tk.Text(right, bg="#151923", fg=self.TEXT, insertbackground=self.TEXT, relief="flat", state="disabled",
                            font=("Segoe UI", 10), padx=10, pady=8, wrap="word")
@@ -467,25 +475,44 @@ class ShockTimerWindows:
         canvas.delete("all")
         width = max(canvas.winfo_width(), 360)
         height = max(canvas.winfo_height(), 390)
-        cx, cy, radius = width / 2, height / 2 - 5, min(width, height) / 2 - 45
+        cx, cy = width / 2, height / 2 + 18
+        radius = min(width / 2 - 45, (height - 68) / 2 - 24)
         box = (cx - radius, cy - radius, cx + radius, cy + radius)
         canvas.create_oval(*box, outline="#2b3344", width=16)
         progress = 1 if self.session.state == "available" else (1 - self.session.remaining() / 30 if self.session.state == "cooldown" else 0)
         color = self.GREEN if self.session.state == "available" else (self.BLUE if self.session.state == "cooldown" else "#596174")
         if progress:
             canvas.create_arc(*box, start=90, extent=-359.9 * progress, style="arc", outline=color, width=16)
+        countdown = "0" if self.session.state == "available" else (str(math.ceil(self.session.remaining())) if self.session.state == "cooldown" else "30")
+        digit_width, digit_height, gap = 48, 64, 4
+        total_width = len(countdown) * digit_width + (len(countdown) - 1) * gap
+        digit_y = cy - radius - digit_height / 2 - 10
+        for index, digit in enumerate(countdown):
+            digit_x = cx - total_width / 2 + index * (digit_width + gap) + digit_width / 2
+            canvas.create_image(digit_x, digit_y, image=self.digits[digit])
         canvas.create_image(cx, cy - 12, image=self.small_icon)
         label = "SHOCK AVAILABLE" if self.session.state == "available" else ("SHOCK RECHARGING" if self.session.state == "cooldown" else "WAITING FOR RACE")
         canvas.create_text(cx, cy + radius * 0.72, text=label, fill=self.MUTED, font=("Segoe UI", 10, "bold"))
-        if self.session.state == "idle":
-            self.state_title.configure(text="Listening for race start" if self.enabled else "Ready when you are")
-            self.state_detail.configure(text="The timer begins on the GO cue." if self.enabled else "Enable listening to detect the next race.")
-        elif self.session.state == "cooldown":
-            self.state_title.configure(text="Shock recharging")
-            self.state_detail.configure(text="A shock restarts the timer. FINITO cancels it.")
-        else:
-            self.state_title.configure(text="Shock is available")
-            self.state_detail.configure(text="Listening for the next shock or race finish.")
+
+    def change_hue(self, value):
+        if self._hue_after is not None:
+            self.root.after_cancel(self._hue_after)
+        self._hue_after = self.root.after(60, self.apply_digit_hue, int(float(value)))
+
+    def apply_digit_hue(self, hue):
+        self._hue_after = None
+        self.digits = {}
+        for digit, source in self.original_digits.items():
+            rgba = source.convert("RGBA")
+            alpha = rgba.getchannel("A")
+            hsv = rgba.convert("HSV")
+            h, s, v = hsv.split()
+            h = h.point(lambda _value: int((hue % 360) * 255 / 360))
+            s = s.point(lambda current: max(current, 230))
+            colored = self.PILImage.merge("HSV", (h, s, v)).convert("RGBA")
+            colored.putalpha(alpha)
+            self.digits[digit] = self.ImageTk.PhotoImage(colored)
+        self.draw_timer()
 
     def sound_name(self):
         sound = self.config.get("alert_sound", "")
