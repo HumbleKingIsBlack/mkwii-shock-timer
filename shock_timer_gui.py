@@ -698,7 +698,7 @@ class ShockTimerWindow(Gtk.ApplicationWindow):
 
 class ShockTimerApplication(Gtk.Application):
     def __init__(self):
-        super().__init__(application_id="local.HumbleKingIsBlack.ShockTimer")
+        super().__init__(application_id="io.github.HumbleKingIsBlack.ShockTimer")
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
